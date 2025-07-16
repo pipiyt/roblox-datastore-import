@@ -1,67 +1,67 @@
-const express = require('express');
-const axios = require('axios');
+const express = require("express");
 const app = express();
+const port = process.env.PORT || 3000;
+
+const axios = require("axios");
 
 app.use(express.json());
 
-const API_KEY = process.env.ROBLOX_API_KEY;
+console.log("✅ Сервер запущен");
+console.log("DATASTORE_NAME:", process.env.DATASTORE_NAME);
+console.log("UNIVERSE_ID:", process.env.UNIVERSE_ID);
+
+// Получаем переменные окружения
+const DATASTORE_NAME = process.env.DATASTORE_NAME;
 const UNIVERSE_ID = process.env.UNIVERSE_ID;
-const DATASTORE_NAME = "PlayerSaveData";
+const API_KEY = process.env.ROBLOX_API_KEY;
 
-// === POST /import ===
-// Пример данных, которые отправляются:
-// {
-//   "123456": { "Donated": 1000, "Raised": 500 }
-// }
-app.post('/import', async (req, res) => {
-  const data = req.body;
+// Главная точка входа
+app.post("/api/save", async (req, res) => {
+	const { userId, donated, raised } = req.body;
 
-  for (const [userId, values] of Object.entries(data)) {
-    try {
-      await axios.post(
-        `https://apis.roblox.com/datastores/v1/universes/${UNIVERSE_ID}/standard-datastores/datastore/entries/entry`,
-        {
-          datastoreName: DATASTORE_NAME,
-          entryKey: `Player_${userId}`,
-          data: values
-        },
-        {
-          headers: {
-            'x-api-key': API_KEY,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      console.log(`✅ Успешно обновлено: Player_${userId}`);
-    } catch (error) {
-      console.error(`❌ Ошибка обновления ${userId}:`, error.response?.data || error.message);
-    }
-  }
+	if (!userId || donated == null || raised == null) {
+		return res.status(400).send("Missing data fields");
+	}
 
-  res.sendStatus(200);
+	try {
+		console.log("📥 Получены данные:", { userId, donated, raised });
+
+		// Отправка данных в Roblox DataStore API
+		const headers = {
+			"Content-Type": "application/json",
+			"x-api-key": API_KEY
+		};
+
+		// Обновляем Donated
+		const donatedUrl = `https://apis.roblox.com/datastores/v1/universes/${UNIVERSE_ID}/standard-datastores/datastore/entries/entry?datastoreName=${DATASTORE_NAME}&entryKey=Player_${userId}`;
+		const donatedData = {
+			data: {
+				Donated: donated
+			}
+		};
+
+		await axios.post(donatedUrl, donatedData, { headers });
+		console.log("✅ Donated обновлено");
+
+		// Обновляем Raised
+		const raisedUrl = `https://apis.roblox.com/datastores/v1/universes/${UNIVERSE_ID}/standard-datastores/datastore/entries/entry?datastoreName=${DATASTORE_NAME}&entryKey=Player_${userId}`;
+		const raisedData = {
+			data: {
+				Raised: raised
+			}
+		};
+
+		await axios.post(raisedUrl, raisedData, { headers });
+		console.log("✅ Raised обновлено");
+
+		res.status(200).send("Data saved");
+	} catch (err) {
+		console.error("❌ Ошибка:", err.response?.data || err.message);
+		res.status(500).send("Ошибка сервера");
+	}
 });
 
-// === GET /user/:id ===
-// Вернёт { Donated: ..., Raised: ... }
-app.get('/user/:id', async (req, res) => {
-  const userId = req.params.id;
-
-  try {
-    const response = await axios.get(
-      `https://apis.roblox.com/datastores/v1/universes/${UNIVERSE_ID}/standard-datastores/datastore/entries/entry?datastoreName=${DATASTORE_NAME}&entryKey=Player_${userId}`,
-      {
-        headers: {
-          'x-api-key': API_KEY
-        }
-      }
-    );
-    res.json(response.data);
-  } catch (error) {
-    console.error(`❌ Не удалось получить данные ${userId}:`, error.response?.data || error.message);
-    res.status(404).json({ error: 'Not found' });
-  }
-});
-
-app.listen(3000, () => {
-  console.log('🚀 Сервер запущен на порту 3000');
+// Запуск сервера
+app.listen(port, () => {
+	console.log(`🚀 Сервер слушает порт ${port}`);
 });
